@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 # Core dependencies
-from playwright.async_api import async_playwright, Browser, Page
+
 import google.generativeai as genai
 import cv2
 import numpy as np
