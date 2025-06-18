@@ -1,5 +1,4 @@
 from config.system_config import SystemConfig, CloneResult, GeneratedProject
-from agents.screenshot_agent import ScreenshotAgent
 from agents.analyzer_agent import AnalyzerAgent
 from agents.generator_agent import GeneratorAgent
 from agents.detector_agent import DetectorAgent
@@ -10,12 +9,16 @@ import os
 import logging
 import json
 import traceback
+from pathlib import Path
+import aiohttp
+import base64
+import asyncio
 
 class WebsiteCloneOrchestrator:
     def __init__(self, config: SystemConfig):
         self.config = config
         self.logger = self._setup_logger()
-        self.screenshot_agent = ScreenshotAgent(config)
+        # self.screenshot_agent = ScreenshotAgent(config)
         self.analyzer = AnalyzerAgent(config)
         self.generator = GeneratorAgent(config)
         self.detector = DetectorAgent(config)
@@ -24,7 +27,7 @@ class WebsiteCloneOrchestrator:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         return logging.getLogger(self.__class__.__name__)
 
-    async def clone_website(self, url: str, framework: str = "react", options: Dict = {}) -> CloneResult:
+    async def clone_website(self, url: str, system_prompt: str, framework: str = "react", options: Dict = {}) -> CloneResult:
         """Main cloning pipeline with enhanced analyzer and generator integration"""
         start_time = datetime.now()
         analysis_result = None
@@ -36,8 +39,8 @@ class WebsiteCloneOrchestrator:
             timestamp = int(start_time.timestamp())
             screenshot_path = f"{getattr(self.config, 'output_dir', 'generated_project')}/original_{timestamp}.png"
             
-            # Capture screenshot using screenshot agent
-            await self.screenshot_agent.capture_full_page_url(url, screenshot_path)
+            # Capture screenshot using Firecrawl directly
+            await self._capture_full_page_url(url, screenshot_path)
             
             # Step 2: Enhanced Analysis
             self.logger.info("Analyzing website structure...")
@@ -66,10 +69,10 @@ class WebsiteCloneOrchestrator:
             # Step 3: Enhanced Code Generation
             self.logger.info("Generating code...")
             # Note: generate_code expects (analysis, output_dir) not (analysis, framework)
-            output_dir = f"{getattr(self.config, 'output_dir', 'generated_project')}/project_{timestamp}"
+            # output_dir = f"{getattr(self.config, 'output_dir', 'generated_project')}/project_{timestamp}"
             generated_project = await self.generator.generate_code(
-                analysis_result, 
-                output_dir
+                analysis_result,
+                system_prompt
             )
             
             # Step 4: Validate generated code
@@ -77,19 +80,19 @@ class WebsiteCloneOrchestrator:
                 raise HTTPException(status_code=400, detail="Generated code validation failed")
             
             # Step 5: Compare visual similarity
-            generated_url = options.get('generated_url', 'http://localhost:3000')
+            # generated_url = options.get('generated_url', 'http://localhost:3000')
             generated_screenshot = f"{getattr(self.config, 'output_dir', 'generated_project')}/generated_{timestamp}.png"
             similarity_score = 0.0
             
             try:
-                await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
+                # await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
                 similarity_score = await self.detector.validate_similarity(screenshot_path, generated_screenshot)
             except Exception as e:
                 self.logger.warning(f"Visual comparison failed: {e}. Setting similarity to 0.5")
                 similarity_score = 0.5
             
             # Step 6: Run Lighthouse audit (optional)
-            lighthouse_score = await self._run_lighthouse_audit(generated_url) if options.get('run_lighthouse', False) else None
+            # lighthouse_score = await self._run_lighthouse_audit(generated_url) if options.get('run_lighthouse', False) else None
             
             generation_time = (datetime.now() - start_time).total_seconds()
             
@@ -99,8 +102,7 @@ class WebsiteCloneOrchestrator:
                 status="success",
                 similarity_score=similarity_score,
                 generation_time=generation_time,
-                lighthouse_score=lighthouse_score,
-                deployed_url=generated_url
+                # deployed_url=generated_url
             )
             
         except Exception as e:
@@ -204,8 +206,90 @@ class WebsiteCloneOrchestrator:
         """Compare visual similarity using DetectorAgent"""
         try:
             generated_screenshot = f"{getattr(self.config, 'output_dir', 'generated_project')}/generated_{int(datetime.now().timestamp())}.png"
-            await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
+            # await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
             return await self.detector.validate_similarity(original_screenshot, generated_screenshot)
         except Exception as e:
             self.logger.error(f"Visual comparison failed: {str(e)}")
             return 0.5
+
+    async def _capture_full_page_url(self, url: str, output_path: str) -> str:
+        """
+        Capture a full-page screenshot of `url` using the Firecrawl API and save
+        it to `output_path`.
+        """
+        try:
+            api_key = os.getenv("FIRECRAWL_API_KEY")
+            if not api_key:
+                raise ValueError("FIRECRAWL_API_KEY environment variable not set")
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "url": url,
+                "formats": ["screenshot"],
+                "actions": [
+                    {"type": "wait", "milliseconds": 2000},
+                    {"type": "screenshot"}
+                ]
+            }
+
+            screenshot_data: Optional[bytes] = None
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.firecrawl.dev/v1/scrape",
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        self.logger.error(f"Firecrawl API error ({response.status}): {error_text}")
+                        raise Exception(f"Firecrawl API error ({response.status}): {error_text}")
+
+                    result = await response.json()
+
+                    if not result.get("success"):
+                        self.logger.error(f"Firecrawl API response unsuccessful: {result}")
+                        raise Exception(result.get("error", "Firecrawl scrape unsuccessful"))
+
+                    # 1. Preferred: URL in data.actions.screenshots
+                    try:
+                        screenshot_url = result["data"]["actions"]["screenshots"][0]
+                        async with session.get(screenshot_url) as scr_resp:
+                            if scr_resp.status != 200:
+                                raise Exception(f"download status {scr_resp.status}")
+                            screenshot_data = await scr_resp.read()
+                    except Exception:
+                        # 2. Fallback: data.screenshot (URL or base64)
+                        raw_shot = result.get("data", {}).get("screenshot")
+                        if raw_shot:
+                            if isinstance(raw_shot, str) and raw_shot.startswith("http"):
+                                async with session.get(raw_shot) as scr_resp:
+                                    if scr_resp.status != 200:
+                                        raise Exception(f"download status {scr_resp.status}")
+                                    screenshot_data = await scr_resp.read()
+                            elif isinstance(raw_shot, str):
+                                raw_shot += "=" * (-len(raw_shot) % 4)  # pad base64
+                                screenshot_data = base64.b64decode(raw_shot)
+
+            if not screenshot_data:
+                raise Exception("No screenshot data returned from Firecrawl")
+
+            # Save file in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+
+            def _write():
+                with open(output_path, "wb") as f:
+                    f.write(screenshot_data)
+
+            await loop.run_in_executor(None, _write)
+            self.logger.info(f"Screenshot saved using Firecrawl: {output_path}")
+            return output_path
+        except Exception as e:
+            self.logger.error(f"Failed to capture screenshot for {url}: {str(e)}")
+            raise

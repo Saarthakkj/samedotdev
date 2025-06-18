@@ -10,6 +10,13 @@ import base64
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup  # For HTML text extraction in fallback
+# import os
+# from dotenv import load_dotenv
+
+# load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
+
+
+
 
 # Optional: Uncomment for Tesseract OCR fallback
 try:

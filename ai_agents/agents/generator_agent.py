@@ -6,6 +6,11 @@ from typing import Dict, List, Optional
 import asyncio
 import google.generativeai as genai
 from config.system_config import SystemConfig
+import os
+# from dotenv import load_dotenv
+
+# load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
+
 
 class GeneratorAgent:
     def __init__(self, config: SystemConfig):
@@ -48,16 +53,16 @@ class GeneratorAgent:
         self.logger.error("Failed to initialize any Gemini model")
         raise ValueError("No suitable Gemini model available")
 
-    async def generate_code(self, analysis: Dict, output_dir: str) -> Dict:
+    async def generate_code(self, analysis: Dict, system_prompt: str) -> Dict:
         """
         Generate code based on analysis - this is the method your orchestrator is calling
         This is an alias for generate_website to maintain compatibility
         """
-        return await self.generate_website(analysis, output_dir)
+        return await self.generate_website(analysis)
 
-    async def generate_website(self, analysis: Dict, output_dir: str) -> Dict:
+    async def generate_website(self, analysis: Dict) -> Dict:
         """Generate website based on analysis using Gemini"""
-        self.logger.info(f"Starting website generation for output directory: {output_dir}")
+        # self.logger.info(f"Starting website generation for output directory: {output_dir}")
         
         try:
             # Validate analysis
@@ -65,28 +70,28 @@ class GeneratorAgent:
                 self.logger.error("Invalid analysis provided")
                 raise ValueError("Invalid analysis structure")
 
-            # Create output directory
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
+            # # Create output directory
+            # output_path = Path(output_dir)
+            # output_path.mkdir(parents=True, exist_ok=True)
 
             # Generate project structure and code
-            generated_files = await self._generate_project_files(analysis, output_path)
+            generated_files = await self._generate_project_files(analysis)
             
             # Save generated files
-            for file_path, content in generated_files.items():
-                full_path = output_path / file_path
-                full_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(full_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                self.logger.info(f"Generated file: {full_path}")
+            # for file_path, content in generated_files.items():
+            #     full_path = output_path / file_path
+            #     full_path.parent.mkdir(parents=True, exist_ok=True)
+            #     with open(full_path, 'w', encoding='utf-8') as f:
+            #         f.write(content)
+            #     self.logger.info(f"Generated file: {full_path}")
 
             # Return generation result
             result = {
                 "status": "success",
-                "generated_files": list(generated_files.keys()),
-                "output_directory": str(output_path.absolute()),
-                "framework": analysis.get("framework", {}).get("primary", "unknown"),
-                "css_framework": analysis.get("framework", {}).get("css", "unknown")
+                # "generated_files": list(generated_files.keys()),
+                # "output_directory": str(output_path.absolute()),
+                # "framework": analysis.get("framework", {}).get("primary", "unknown"),
+                # "css_framework": analysis.get("framework", {}).get("css", "unknown")
             }
             self.logger.info(f"Website generation completed successfully")
             return result
@@ -96,16 +101,18 @@ class GeneratorAgent:
             return {
                 "status": "error",
                 "error": str(e),
-                "generated_files": [],
-                "output_directory": output_dir
+                "generated_files": []
+                # "output_directory": output_dir
             }
 
-    async def _generate_project_files(self, analysis: Dict, output_path: Path) -> Dict[str, str]:
+    async def _generate_project_files(self, analysis: Dict, system_prompt: str) ->  str:
         """Generate all project files based on analysis"""
         generated_files = {}
         
         # Create prompt based on analysis
-        prompt = self._create_generation_prompt(analysis)
+        
+        prompt = system_prompt + "\n\n" + analysis.get("content_structure", {}).get("text_content", {})
+        # prompt = self._create_generation_prompt(analysis)
         
         try:
             # Generate code using Gemini
@@ -113,121 +120,126 @@ class GeneratorAgent:
             
             if not response or not response.text:
                 raise ValueError("Empty response from Gemini")
-
-            # Parse response to extract files
-            files = self._parse_gemini_response(response.text)
             
-            # Process each file
-            for file_path, content in files.items():
-                # Clean file path
-                clean_path = self._clean_file_path(file_path)
-                generated_files[clean_path] = content
+            
+            print(f"this is the response from gemini  -- inside generation agent : \n\n{response.text} \n\n")
+            
+            return response.text
+
+            # # Parse response to extract files
+            # files = self._parse_gemini_response(response.text)
+            
+            # # Process each file
+            # for file_path, content in files.items():
+            #     # Clean file path
+            #     clean_path = self._clean_file_path(file_path)
+            #     generated_files[clean_path] = content
                 
-                # Ensure package.json includes necessary dependencies
-                if clean_path == "package.json":
-                    generated_files[clean_path] = self._enhance_package_json(
-                        content,
-                        analysis.get("cloning_requirements", {}).get("package_json", {})
-                    )
+            #     # Ensure package.json includes necessary dependencies
+            #     if clean_path == "package.json":
+            #         generated_files[clean_path] = self._enhance_package_json(
+            #             content,
+            #             analysis.get("cloning_requirements", {}).get("package_json", {})
+            #         )
 
-            # Add any missing critical files
-            generated_files = self._ensure_critical_files(generated_files, analysis)
+            # # Add any missing critical files
+            # generated_files = self._ensure_critical_files(generated_files, analysis)
             
-            return generated_files
+            # return generated_files
 
         except Exception as e:
             self.logger.error(f"Failed to generate project files: {str(e)}")
             raise
 
-    def _create_generation_prompt(self, analysis: Dict) -> str:
-        """Create prompt for code generation"""
-        framework = analysis.get("framework", {}).get("primary", "vanilla")
-        css_framework = analysis.get("framework", {}).get("css", "vanilla")
-        colors = analysis.get("colors", {})
-        typography = analysis.get("typography", {})
-        components = analysis.get("components", [])
-        content_structure = analysis.get("content_structure", {})
-        cloning_requirements = analysis.get("cloning_requirements", {})
+    # def _create_generation_prompt(self, analysis: Dict) -> str:
+    #     """Create prompt for code generation"""
+    #     framework = analysis.get("framework", {}).get("primary", "vanilla")
+    #     css_framework = analysis.get("framework", {}).get("css", "vanilla")
+    #     colors = analysis.get("colors", {})
+    #     typography = analysis.get("typography", {})
+    #     components = analysis.get("components", [])
+    #     content_structure = analysis.get("content_structure", {})
+    #     cloning_requirements = analysis.get("cloning_requirements", {})
 
-        return f"""
-        You are an expert web developer tasked with generating a complete, production-ready website based on the following analysis. Do not use templates; generate all code from scratch using the specifications provided. Create a fully-featured, beautiful website that matches the analysis exactly.
+    #     return f"""
+    #     You are an expert web developer tasked with generating a complete, production-ready website based on the following analysis. Do not use templates; generate all code from scratch using the specifications provided. Create a fully-featured, beautiful website that matches the analysis exactly.
 
-        SYSTEM CONSTRAINTS:
-        - Use WebContainer environment (browser-based Node.js runtime)
-        - Prefer Vite for web server
-        - Use only pure JavaScript/JSX, no native binaries
-        - Use only standard Python library if Python is needed
-        - Prefer SQLite or libsql for databases
-        - Use 2-space indentation
-        - Split functionality into small, reusable modules
-        - Use valid URLs for images (Unsplash stock photos)
-        - Use lucide-react for icons
+    #     SYSTEM CONSTRAINTS:
+    #     - Use WebContainer environment (browser-based Node.js runtime)
+    #     - Prefer Vite for web server
+    #     - Use only pure JavaScript/JSX, no native binaries
+    #     - Use only standard Python library if Python is needed
+    #     - Prefer SQLite or libsql for databases
+    #     - Use 2-space indentation
+    #     - Split functionality into small, reusable modules
+    #     - Use valid URLs for images (Unsplash stock photos)
+    #     - Use lucide-react for icons
 
-        WEBSITE SPECIFICATIONS:
-        Framework:
-        - Primary: {framework}
-        - CSS: {css_framework}
-        - Build Tools: {json.dumps(analysis.get('framework', {}).get('build_tools', []))}
+    #     WEBSITE SPECIFICATIONS:
+    #     Framework:
+    #     - Primary: {framework}
+    #     - CSS: {css_framework}
+    #     - Build Tools: {json.dumps(analysis.get('framework', {}).get('build_tools', []))}
         
-        Colors:
-        - Primary: {colors.get('primary', '#3b82f6')}
-        - Secondary: {colors.get('secondary', '#f8fafc')}
-        - Accent: {colors.get('accent', '#10b981')}
-        - Background: {colors.get('background', '#ffffff')}
-        - Text: {colors.get('text', '#111827')}
+    #     Colors:
+    #     - Primary: {colors.get('primary', '#3b82f6')}
+    #     - Secondary: {colors.get('secondary', '#f8fafc')}
+    #     - Accent: {colors.get('accent', '#10b981')}
+    #     - Background: {colors.get('background', '#ffffff')}
+    #     - Text: {colors.get('text', '#111827')}
 
-        Typography:
-        - Primary Font: {typography.get('primary_font', 'system-ui')}
-        - Font Sizes: {json.dumps(typography.get('font_sizes', ['14px', '16px', '18px']))}
-        - Font Weights: {json.dumps(typography.get('font_weights', [400, 500, 600]))}
-        - Line Heights: {json.dumps(typography.get('line_heights', ['1.4', '1.6']))}
+    #     Typography:
+    #     - Primary Font: {typography.get('primary_font', 'system-ui')}
+    #     - Font Sizes: {json.dumps(typography.get('font_sizes', ['14px', '16px', '18px']))}
+    #     - Font Weights: {json.dumps(typography.get('font_weights', [400, 500, 600]))}
+    #     - Line Heights: {json.dumps(typography.get('line_heights', ['1.4', '1.6']))}
 
-        Components: {json.dumps(components)}
+    #     Components: {json.dumps(components)}
         
-        Content Structure:
-        - Sections: {json.dumps(content_structure.get('sections', []))}
-        - Text Content: {json.dumps(content_structure.get('text_content', {}))}
-        - Images: {json.dumps(content_structure.get('images', []))}
-        - Icons: {json.dumps(content_structure.get('icons', []))}
+    #     Content Structure:
+    #     - Sections: {json.dumps(content_structure.get('sections', []))}
+    #     - Text Content: {json.dumps(content_structure.get('text_content', {}))}
+    #     - Images: {json.dumps(content_structure.get('images', []))}
+    #     - Icons: {json.dumps(content_structure.get('icons', []))}
 
-        Interactive Elements:
-        - Navigation: {json.dumps(analysis.get('interactive_elements', {}).get('navigation', []))}
-        - Buttons: {json.dumps(analysis.get('interactive_elements', {}).get('buttons', []))}
-        - Forms: {json.dumps(analysis.get('interactive_elements', {}).get('forms', []))}
-        - Animations: {json.dumps(analysis.get('interactive_elements', {}).get('animations', []))}
+    #     Interactive Elements:
+    #     - Navigation: {json.dumps(analysis.get('interactive_elements', {}).get('navigation', []))}
+    #     - Buttons: {json.dumps(analysis.get('interactive_elements', {}).get('buttons', []))}
+    #     - Forms: {json.dumps(analysis.get('interactive_elements', {}).get('forms', []))}
+    #     - Animations: {json.dumps(analysis.get('interactive_elements', {}).get('animations', []))}
 
-        Cloning Requirements:
-        - NPM Packages: {json.dumps(cloning_requirements.get('npm_packages', []))}
-        - Component Files: {json.dumps(cloning_requirements.get('component_files', []))}
-        - Pages: {json.dumps(cloning_requirements.get('pages', []))}
-        - Styles: {json.dumps(cloning_requirements.get('styles', []))}
-        - Config Files: {json.dumps(list(cloning_requirements.get('config_files', {}).keys()))}
+    #     Cloning Requirements:
+    #     - NPM Packages: {json.dumps(cloning_requirements.get('npm_packages', []))}
+    #     - Component Files: {json.dumps(cloning_requirements.get('component_files', []))}
+    #     - Pages: {json.dumps(cloning_requirements.get('pages', []))}
+    #     - Styles: {json.dumps(cloning_requirements.get('styles', []))}
+    #     - Config Files: {json.dumps(list(cloning_requirements.get('config_files', {}).keys()))}
 
-        INSTRUCTIONS:
-        1. Generate a complete website matching the analysis specifications
-        2. Use {framework} with {css_framework} for styling
-        3. Create all necessary files (index.html/jsx, components, styles, configs)
-        4. Include package.json with all required dependencies
-        5. Use Vite as the development server
-        6. Implement all components, interactive elements, and animations
-        7. Use exact text content from text_content
-        8. Apply specified colors and typography
-        9. Create modular, maintainable code
-        10. Return output as a JSON object with file paths as keys and content as values
-        11. Include setup commands in package.json scripts
-        12. Use Unsplash URLs for images and lucide-react for icons
+    #     INSTRUCTIONS:
+    #     1. Generate a complete website matching the analysis specifications
+    #     2. Use {framework} with {css_framework} for styling
+    #     3. Create all necessary files (index.html/jsx, components, styles, configs)
+    #     4. Include package.json with all required dependencies
+    #     5. Use Vite as the development server
+    #     6. Implement all components, interactive elements, and animations
+    #     7. Use exact text content from text_content
+    #     8. Apply specified colors and typography
+    #     9. Create modular, maintainable code
+    #     10. Return output as a JSON object with file paths as keys and content as values
+    #     11. Include setup commands in package.json scripts
+    #     12. Use Unsplash URLs for images and lucide-react for icons
 
-        OUTPUT FORMAT:
-        Return ONLY a valid JSON object with no additional text or formatting:
-        {{
-            "package.json": "...",
-            "index.html": "...",
-            "src/App.jsx": "...",
-            "src/main.jsx": "...",
-            "src/styles.css": "...",
-            "vite.config.js": "..."
-        }}
-        """
+    #     OUTPUT FORMAT:
+    #     Return ONLY a valid JSON object with no additional text or formatting:
+    #     {{
+    #         "package.json": "...",
+    #         "index.html": "...",
+    #         "src/App.jsx": "...",
+    #         "src/main.jsx": "...",
+    #         "src/styles.css": "...",
+    #         "vite.config.js": "..."
+    #     }}
+    #     """
         
     def _parse_gemini_response(self, response_text: str) -> Dict[str, str]:
         """Parse Gemini response into file structure"""
@@ -520,33 +532,6 @@ export default defineConfig({
 
         return generated_files
 
-    async def batch_generate(self, analyses: List[Dict], output_base_dir: str) -> List[Dict]:
-        """Generate multiple websites in batch"""
-        self.logger.info(f"Starting batch generation for {len(analyses)} analyses")
-        
-        results = []
-        for i, analysis in enumerate(analyses):
-            try:
-                output_dir = os.path.join(output_base_dir, f"website_{i}")
-                result = await self.generate_website(analysis, output_dir)
-                result["batch_index"] = i
-                results.append(result)
-                
-                # Add small delay to avoid rate limiting
-                await asyncio.sleep(0.1)
-                
-            except Exception as e:
-                self.logger.error(f"Failed to generate website {i+1}: {str(e)}")
-                results.append({
-                    "status": "error",
-                    "error": str(e),
-                    "generated_files": [],
-                    "output_directory": os.path.join(output_base_dir, f"website_{i}"),
-                    "batch_index": i
-                })
-        
-        self.logger.info(f"Batch generation complete: {len(results)} results")
-        return results
 
     def save_generation_result(self, result: Dict, output_path: str):
         """Save generation result to file"""

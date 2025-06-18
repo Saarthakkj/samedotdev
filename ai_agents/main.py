@@ -11,11 +11,13 @@ from datetime import datetime
 import base64
 import hashlib
 import logging
+from agents.analyzer_agent import AnalyzerAgent
+from agents.generator_agent import GeneratorAgent
 
-from dotenv import load_dotenv
-load_dotenv() 
+# from dotenv import load_dotenv
+# load_dotenv(".env" , __dirname = os.path)  
 
-# Core dependencies
+# # Core dependencies
 
 import google.generativeai as genai
 import cv2
@@ -102,7 +104,7 @@ app = FastAPI(title="AI Website Cloning System", version="1.0.0")
 # Global config (would be loaded from environment)
 config = SystemConfig(
     gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-    firebase_project_id=os.getenv("FIREBASE_PROJECT_ID", "demo-project")
+    firecrawl_api_key=os.getenv("FIRECRAWL_API_KEY", "")
 )
 
 @app.post("/clone", response_model=CloneResult)
@@ -134,6 +136,70 @@ async def root():
             "health": "GET /health"
         }
     }
+
+class LLMRequest(BaseModel):
+    system_prompt: str
+    #  e.g. [{ "role": "user", "content": "Hello" }, ...]
+    messages: List[dict]
+
+class LLMResult(BaseModel):
+    response: str
+
+@app.post("/generate", response_model=LLMResult)
+async def generate_llm_answer(req: LLMRequest):
+    """
+    Forward system prompt + messages to Gemini via GeneratorAgent (or directly).
+    Return plain text exactly like ai-sdk generateText() did.
+    """
+    
+    # Parse URL from messages
+    url = None
+    for message in req.messages:
+        if message.get('role') == 'user':
+            content = message.get('content', '')
+            # Look for URL patterns in the content
+            import re
+            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+            urls = re.findall(url_pattern, content)
+            if urls:
+                url = urls[0]  # Take the first URL found
+                break
+    
+    if not url:
+        raise HTTPException(status_code=400, detail="No URL found in messages")
+    
+    
+    analyzer = AnalyzerAgent(config)
+    generator = GeneratorAgent(config)
+    
+    analysis_result = await analyzer.analyze_screenshot(url , req.system_prompt)
+    generated_code = await generator.generate_code(analysis_result , req.system_prompt)
+    
+    print(f"this is the analysis result of GENERATED CODE : \n\n{generated_code} \n\n")
+    
+    return LLMResult(response=json.dumps(generated_code))
+    
+    
+    
+    #   run this when agnets after generator agents are done : 
+    
+    
+    
+    
+    # clone_website(url  , req.system_prompt, "react" , {}) 
+    
+    
+    
+    # try:
+    #     prompt_text = req.system_prompt + "\n\n" + "\n".join(
+    #         f"{m['role']}: {m['content']}" for m in req.messages
+    #     )
+    #     # reuse your existing GeneratorAgent OR call the model here
+    #     model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    #     resp = await model.generate_content_async(prompt_text)
+    #     return LLMResult(response=resp.text.strip())
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
