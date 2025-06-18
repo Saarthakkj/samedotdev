@@ -9,7 +9,7 @@ firecrawl-py
 opencv-python==4.8.1.78
 scikit-image==0.22.0
 Pillow==10.1.0
-numpy==1.25.2
+# numpy==1.25.2
 
 # Utilities
 python-dotenv==1.0.0
