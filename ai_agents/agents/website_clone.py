@@ -1,4 +1,5 @@
 from config.system_config import SystemConfig, CloneResult, GeneratedProject
+from agents.screenshot_agent import ScreenshotAgent
 from agents.analyzer_agent import AnalyzerAgent
 from agents.generator_agent import GeneratorAgent
 from agents.detector_agent import DetectorAgent
@@ -25,6 +26,7 @@ class WebsiteCloneOrchestrator:
             self.artifact_service = InMemoryArtifactService()
         else:
             self.artifact_service = None
+        self.screenshot_agent = ScreenshotAgent(config)
         self.analyzer = AnalyzerAgent(config)
         self.generator = GeneratorAgent(config)
         self.detector = DetectorAgent(config)
@@ -95,9 +97,9 @@ class WebsiteCloneOrchestrator:
             
             screenshot_path = f"{output_dir}/original_{timestamp}.png"
             
-            # Capture screenshot using analyzer agent
+            # Capture screenshot using screenshot agent
             try:
-                screenshot_path = await self.analyzer.capture_screenshot(url, screenshot_path)
+                screenshot_path = await self.screenshot_agent.capture_full_page_url(url, screenshot_path)
                 self.logger.info(f"Screenshot captured successfully: {screenshot_path}")
             except Exception as e:
                 self.logger.error(f"Screenshot capture failed: {str(e)}")
@@ -145,6 +147,9 @@ class WebsiteCloneOrchestrator:
             if analysis_revision_id:
                 artifact_ids["analysis"] = analysis_revision_id
 
+            # Validate analysis results
+           
+            
             # Step 3: Code Generation
             self.logger.info("Generating Next.js code...")
             project_output_dir = f"{output_dir}/project_{timestamp}"
@@ -169,7 +174,10 @@ class WebsiteCloneOrchestrator:
             if generated_revision_id:
                 artifact_ids["generated_project"] = generated_revision_id
 
-            # Step 4: Compare visual similarity
+            # Step 4: Validate generated code
+
+            
+            # Step 5: Compare visual similarity
             similarity_score = 0.0
             generated_url = options.get('generated_url', 'http://localhost:3000')
             
@@ -186,7 +194,7 @@ class WebsiteCloneOrchestrator:
                     self.logger.warning(f"Visual comparison failed: {e}. Setting similarity to 0.5")
                     similarity_score = 0.5
             
-            # Step 5: Run Lighthouse audit
+            # Step 6: Run Lighthouse audit
             lighthouse_score = None
             if options.get('run_lighthouse', False):
                 try:
@@ -231,6 +239,8 @@ class WebsiteCloneOrchestrator:
         else:
             return "post_generation_validation"
 
+   
+   
     async def _run_lighthouse_audit(self, url: str) -> Optional[Dict]:
         """Run Lighthouse audit on the generated website"""
         try:
@@ -251,7 +261,7 @@ class WebsiteCloneOrchestrator:
         try:
             output_dir = getattr(self.config, 'output_dir', 'generated_project')
             generated_screenshot = f"{output_dir}/generated_{timestamp}.png"
-            await self.analyzer.capture_screenshot(generated_url, generated_screenshot)
+            await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
             similarity_score = await self.detector.validate_similarity(original_screenshot, generated_screenshot)
             
             if os.path.exists(generated_screenshot):

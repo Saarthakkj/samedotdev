@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #fafafa;
+  color: #2a2a29;
+  font-family: sans-serif; /* Or specify a preferred sans-serif font */
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600; /* Example, adjust as needed */
+  color: #141414;
+}
+
+p {
+  color: #494644;
+  line-height: 1.6;
+}
+
+.button {
+  @apply font-bold py-2 px-4 rounded;
+  background-color: #f3ac6c;
+  color: #fafafa;
+}
+
+.button:hover {
+  background-color: #c27739;
+}
+
+.footer {
+  background-color: #ededec;
+  color: #6a6f66;
+  font-size: 0.8rem;
+}
+
+.card {
+  background-color: #fff;
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+}
+
+.text-muted {
+  color: #838885;
+}
+
+.border-light {
+  border-color: #d8d8d7;
+}

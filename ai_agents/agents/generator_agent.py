@@ -133,6 +133,7 @@ class RateLimitedDCGenGenerator:
         8. No markdown formatting in responses - return pure code only
         9. Ensure proper JSX syntax with proper closing tags and React patterns
         10. Add any additional npm packages needed to package.json dependencies
+        11. Return ONLY valid JSON - no extra text, explanations, or multiple JSON objects
         
         EXAMPLE VALID JSX COMPONENT:
         ```jsx
