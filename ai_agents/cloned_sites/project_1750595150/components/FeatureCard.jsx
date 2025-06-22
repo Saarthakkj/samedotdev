@@ -1,5 +1,5 @@
 import { Star } from 'lucide-react';;
-
+import React from 'react';
 export default function FeatureCard({ title, description, icon, imageURL }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 max-w-sm">

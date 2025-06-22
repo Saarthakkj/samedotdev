@@ -1,4 +1,4 @@
-import { Home, User, Settings, Search } from 'lucide-react';;
+import { Home, User, Settings, Search , Menu} from 'lucide-react';;
 
 export default function Header() {
   return (
