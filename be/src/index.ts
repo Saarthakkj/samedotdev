@@ -83,18 +83,21 @@ app.post("/template", async (req, res) => {
 })
 
 app.post("/chat", async (req, res) => {
-    const messages = req.body.messages;
+    // console.log("this is the request body : ", req.body.messages); 
+
+    const messages = req.body.messages ;
+
+    // console.log(` this is the messages received from the client :  \n\n${messages.slice(1000)} \n\n`); 
 
     try
     {
         const {data } = await axios.post("http://localhost:8000/generate"  , {
             system_prompt : getSystemPrompt()             , 
             messages 
-
         }) ; 
 
-        console.log(` this is the data received from agents /generate endpoint :  \n\n${data.response} \n\n`); 
-        // console.log(data.response); 
+        console.log("data received from agents /generate endpoint"); 
+        console.log(data.response); 
 
         res.json({response : data.response}); 
         // const {data} = await generateText({
@@ -106,7 +109,8 @@ app.post("/chat", async (req, res) => {
     }
     catch(e)
     {
-        console.log(e);
+        // console.log(e);
+        console.log("error here");
     }
     // res.json({
     //     response: (response.content[0] as TextBlock)?.text

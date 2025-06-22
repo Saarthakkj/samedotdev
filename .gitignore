@@ -1,3 +1,13 @@
-node_modules
-dist
+# Node.js
+**/node_modules/
+**/dist/
+
+# Environment variables
 .env
+
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python

@@ -3,10 +3,18 @@ from typing import Dict, List, Optional
 import os
 from pydantic import BaseModel
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+
+
+
 @dataclass
 class SystemConfig:
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", "")
+    firecrawl_api_key: str = os.getenv("FIRECRAWL_API_KEY", "")
     output_dir: str = "./cloned_sites"
     max_wait_time: int = 30000
     screenshot_width: int = 1920

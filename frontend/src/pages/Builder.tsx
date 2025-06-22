@@ -257,7 +257,9 @@ export function Builder() {
               {activeTab === 'code' ? (
                 <CodeEditor file={selectedFile} />
               ) : (
-                <PreviewFrame webContainer={webcontainer} files={files} />
+                webcontainer            // wait until it exists
+                  ? <PreviewFrame webContainer={webcontainer} files={files} />
+                  : <Loader />          // tiny spinner while it boots
               )}
             </div>
           </div>
