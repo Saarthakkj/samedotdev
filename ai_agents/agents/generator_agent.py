@@ -146,7 +146,10 @@ class RateLimitedDCGenGenerator:
         - Implement proper metadata and SEO
 
         ## STYLING REQUIREMENTS
-        - Use ONLY Tailwind CSS utility classes
+        - Use ONLY standard Tailwind CSS utility classes (NO custom classes)
+        - NEVER use @apply with custom color values like bg-fdfeff or text-868d8f
+        - Use ONLY built-in Tailwind colors: bg-white, bg-gray-50, bg-blue-500, text-gray-900, etc.
+        - For custom colors, use arbitrary values: bg-[#fdfeff], text-[#868d8f]
         - Implement responsive design (mobile-first approach)
         - Use consistent spacing scale (4, 8, 12, 16, 24, 32, 48, 64)
         - Follow modern design principles (proper contrast, typography hierarchy)
@@ -191,11 +194,12 @@ class RateLimitedDCGenGenerator:
         - Implement proper cleanup in useEffect
         - Use the latest React patterns and features
         - Follow React 18+ concurrent features guidelines
+        - If using Hooks like useState, useEffect, etc., make sure you add ""use client"" at the top of the file
 
         EXAMPLE PERFECT COMPONENT:
         ```jsx
         import {{ Home, User, Settings }} from 'lucide-react';
-        import {{ useState }} from 'react';
+        import { useState } from 'react';
 
         export default function ExampleComponent({{ title = "Default Title", items = [] }}) {{
         const [isOpen, setIsOpen] = useState(false);

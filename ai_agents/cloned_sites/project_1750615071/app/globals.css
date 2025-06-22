@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles based on analysis */
+body {
+  @apply bg-primary text-gray-100;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  @apply text-secondary-300 font-bold;
+}
+
+a {
+  @apply text-secondary-300;
+}
+
+.container {
+  @apply max-w-7xl mx-auto px-4;
+}
+
+/* You can now also use bg-accent-100, text-yellow-100, etc. in your components */
