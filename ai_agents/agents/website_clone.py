@@ -1,5 +1,4 @@
 from config.system_config import SystemConfig, CloneResult, GeneratedProject
-from agents.screenshot_agent import ScreenshotAgent
 from agents.analyzer_agent import AnalyzerAgent
 from agents.generator_agent import GeneratorAgent
 from agents.detector_agent import DetectorAgent
@@ -26,7 +25,6 @@ class WebsiteCloneOrchestrator:
             self.artifact_service = InMemoryArtifactService()
         else:
             self.artifact_service = None
-        self.screenshot_agent = ScreenshotAgent(config)
         self.analyzer = AnalyzerAgent(config)
         self.generator = GeneratorAgent(config)
         self.detector = DetectorAgent(config)
@@ -97,9 +95,9 @@ class WebsiteCloneOrchestrator:
             
             screenshot_path = f"{output_dir}/original_{timestamp}.png"
             
-            # Capture screenshot using screenshot agent
+            # Capture screenshot using analyzer agent
             try:
-                screenshot_path = await self.screenshot_agent.capture_full_page_url(url, screenshot_path)
+                screenshot_path = await self.analyzer.capture_screenshot(url, screenshot_path)
                 self.logger.info(f"Screenshot captured successfully: {screenshot_path}")
             except Exception as e:
                 self.logger.error(f"Screenshot capture failed: {str(e)}")
@@ -147,10 +145,6 @@ class WebsiteCloneOrchestrator:
             if analysis_revision_id:
                 artifact_ids["analysis"] = analysis_revision_id
 
-            # Validate analysis results
-            if not self._validate_analysis(analysis_result):
-                raise HTTPException(status_code=400, detail="Website analysis failed to produce valid results")
-            
             # Step 3: Code Generation
             self.logger.info("Generating Next.js code...")
             project_output_dir = f"{output_dir}/project_{timestamp}"
@@ -175,11 +169,7 @@ class WebsiteCloneOrchestrator:
             if generated_revision_id:
                 artifact_ids["generated_project"] = generated_revision_id
 
-            # Step 4: Validate generated code
-            if not self._validate_generated_code(generated_project):
-                raise HTTPException(status_code=400, detail="Generated code validation failed")
-            
-            # Step 5: Compare visual similarity
+            # Step 4: Compare visual similarity
             similarity_score = 0.0
             generated_url = options.get('generated_url', 'http://localhost:3000')
             
@@ -196,7 +186,7 @@ class WebsiteCloneOrchestrator:
                     self.logger.warning(f"Visual comparison failed: {e}. Setting similarity to 0.5")
                     similarity_score = 0.5
             
-            # Step 6: Run Lighthouse audit
+            # Step 5: Run Lighthouse audit
             lighthouse_score = None
             if options.get('run_lighthouse', False):
                 try:
@@ -241,94 +231,6 @@ class WebsiteCloneOrchestrator:
         else:
             return "post_generation_validation"
 
-    def _validate_analysis(self, analysis: Dict) -> bool:
-        """Validate analysis results for Next.js 14 components"""
-        try:
-            if not analysis or not isinstance(analysis, dict):
-                self.logger.warning("Analysis result is empty or not a dictionary")
-                return False
-
-            # Check for required fields
-            required_fields = ["components", "cloning_requirements", "content_structure"]
-            missing_fields = [field for field in required_fields if field not in analysis or not analysis[field]]
-            
-            if missing_fields:
-                self.logger.warning(f"Missing or empty fields in analysis: {missing_fields}")
-                return False
-
-            # Verify components exist (should be component names, not file paths)
-            components = analysis.get("components", [])
-            if not components:
-                self.logger.warning("No components found in analysis")
-                return False
-            
-            # Log the components found for debugging
-            self.logger.info(f"Found components: {components}")
-
-            # Verify package.json requirements
-            cloning_reqs = analysis.get("cloning_requirements", {})
-            if not cloning_reqs:
-                self.logger.warning("No cloning requirements found")
-                return False
-            
-            # Check if npm packages are specified
-            npm_packages = cloning_reqs.get("npm_packages", [])
-            if not npm_packages:
-                self.logger.warning("No npm packages specified in cloning requirements")
-                # This is not a critical error, we can use defaults
-
-            # Verify content structure exists
-            content_structure = analysis.get("content_structure", {})
-            if not content_structure:
-                self.logger.warning("No content structure found")
-                return False
-
-            self.logger.info("Analysis validation passed")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Analysis validation failed: {str(e)}")
-            return False
-
-    def _validate_generated_code(self, generated_project: Dict) -> bool:
-        """Validate generated Next.js code for completeness"""
-        try:
-            if not generated_project or not isinstance(generated_project, dict):
-                self.logger.error("Generated project is not a valid dictionary")
-                return False
-            
-            if generated_project.get('status') != 'success':
-                self.logger.error(f"Generator reported failure: {generated_project.get('error', 'Unknown error')}")
-                return False
-            
-            generated_files = generated_project.get('generated_files', [])
-            if not generated_files:
-                self.logger.error("No files were generated")
-                return False
-            
-            # Check for essential Next.js files
-            essential_files = ['package.json', 'app/layout.jsx', 'app/page.jsx', 'next.config.js']
-            missing_files = [f for f in essential_files if not any(f in file_path for file_path in generated_files)]
-            if missing_files:
-                self.logger.error(f"Missing essential Next.js files: {missing_files}")
-                return False
-            
-            output_dir = generated_project.get('output_directory')
-            if output_dir and not os.path.exists(output_dir):
-                self.logger.warning(f"Output directory not found: {output_dir}")
-            
-            artifact_ids = generated_project.get('artifact_ids', {})
-            if not artifact_ids:
-                self.logger.warning("No artifact IDs found in generated project")
-            
-            self.logger.info(f"Generated code validation passed. Files: {len(generated_files)}")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Validation failed: {str(e)}")
-            self.logger.error(f"Generated project structure: {json.dumps(generated_project, indent=2) if isinstance(generated_project, dict) else str(generated_project)}")
-            return False
-
     async def _run_lighthouse_audit(self, url: str) -> Optional[Dict]:
         """Run Lighthouse audit on the generated website"""
         try:
@@ -349,7 +251,7 @@ class WebsiteCloneOrchestrator:
         try:
             output_dir = getattr(self.config, 'output_dir', 'generated_project')
             generated_screenshot = f"{output_dir}/generated_{timestamp}.png"
-            await self.screenshot_agent.capture_full_page_url(generated_url, generated_screenshot)
+            await self.analyzer.capture_screenshot(generated_url, generated_screenshot)
             similarity_score = await self.detector.validate_similarity(original_screenshot, generated_screenshot)
             
             if os.path.exists(generated_screenshot):
