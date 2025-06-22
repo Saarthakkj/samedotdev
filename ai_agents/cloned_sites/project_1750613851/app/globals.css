@@ -1,0 +1,70 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles based on analysis */
+body {
+  font-family: sans-serif; /* Choose a suitable sans-serif font */
+  line-height: 1.6; /* Improve readability */
+  color: #434343; /* Body text color */
+}
+
+h1,
+h2,
+h3 {
+  font-weight: bold;
+  color: #272829; /* Main title and section title color */
+}
+
+h1 {
+  font-size: 2.5rem; /* Adjust as needed */
+}
+
+h2 {
+  font-size: 2rem; /* Adjust as needed */
+}
+
+h3 {
+  font-size: 1.5rem; /* Adjust as needed */
+}
+
+p {
+  margin-bottom: 1rem;
+}
+
+a {
+  color: #272829; /* Link color */
+  text-decoration: underline;
+}
+
+.bg-primary {
+  background-color: #fefefe;
+}
+
+.bg-secondary {
+  background-color: #f7faf9;
+}
+
+.text-secondary {
+  color: #66645f;
+}
+
+.text-accent {
+  color: #989a9a;
+}
+
+/* Style for rounded corners */
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+
+/* Example usage of custom styles - you can add more based on your component needs */
+.card {
+  @apply bg-white shadow-md rounded-lg p-6;
+}
+
+.button {
+  @apply bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded;
+}

@@ -1,0 +1,52 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Styles based on analysis */
+body {
+  background-color: #fdfeff; /* Primary color */
+  color: #292a2b; /* Darker text color */
+  font-family: sans-serif; /* Or specify a suitable font family */
+  line-height: 1.6; /* Improves readability */
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: bold;
+  color: #292a2b; /* Heading color */
+}
+
+a {
+  color: #292a2b; /* Link color */
+  text-decoration: underline; /* Or use other styling */
+}
+
+p {
+  color: #737271; /* Body text color */
+}
+
+
+/* Add more custom styles as needed based on your component design */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.section {
+  margin-bottom: 4rem;
+}
+
+.btn {
+  @apply px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-700;
+}
+
+/* Example of using a secondary color for background */
+.secondary-bg {
+  background-color: #f7faf9;
+}

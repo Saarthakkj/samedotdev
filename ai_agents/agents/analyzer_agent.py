@@ -10,7 +10,7 @@ import numpy as np
 from collections import Counter
 from google.adk.artifacts import InMemoryArtifactService
 import google.generativeai as genai
-
+import pytesseract
 class DCGenAnalyzer:
     """DCGen-enhanced analyzer implementing comprehensive screenshot analysis using Google ADK"""
     
@@ -59,62 +59,39 @@ class DCGenAnalyzer:
         return None
 
     def _extract_dominant_colors(self, image: np.ndarray, num_colors: int = 10) -> List[Tuple[str, float]]:
-        """
-        Extract dominant colors from image using K-means clustering
-        
-        Args:
-            image: RGB image array
-            num_colors: Number of dominant colors to extract
-            
-        Returns:
-            List of (hex_color, percentage) tuples
-        """
         try:
-            # Reshape image to be a list of pixels
-            pixels = image.reshape(-1, 3)
-            
-            # Remove pure black and white pixels to avoid noise
-            mask = ~((pixels == [0, 0, 0]).all(axis=1) | (pixels == [255, 255, 255]).all(axis=1))
+            # Convert RGB to LAB for perceptual clustering
+            lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+            pixels = lab_image.reshape(-1, 3)
+
+            mask = ~((pixels < [10, 10, 10]).all(axis=1) | (pixels > [245, 245, 245]).all(axis=1))
             filtered_pixels = pixels[mask]
-            
+
             if len(filtered_pixels) == 0:
                 return []
-            
-            # Use K-means to find dominant colors
+
             from sklearn.cluster import KMeans
-            
-            # Limit number of pixels for performance
-            if len(filtered_pixels) > 10000:
-                indices = np.random.choice(len(filtered_pixels), 10000, replace=False)
-                sample_pixels = filtered_pixels[indices]
-            else:
-                sample_pixels = filtered_pixels
-            
+            sample_pixels = filtered_pixels[np.random.choice(len(filtered_pixels), min(10000, len(filtered_pixels)), replace=False)]
+
             kmeans = KMeans(n_clusters=min(num_colors, len(sample_pixels)), random_state=42, n_init=10)
             kmeans.fit(sample_pixels)
-            
-            # Get colors and their frequencies
-            colors = kmeans.cluster_centers_.astype(int)
+
             labels = kmeans.labels_
-            
-            # Calculate percentages
             label_counts = Counter(labels)
             total_pixels = len(labels)
-            
+
+            colors_lab = kmeans.cluster_centers_.astype(np.uint8).reshape(-1, 1, 3)
+            colors_rgb = cv2.cvtColor(colors_lab, cv2.COLOR_LAB2RGB).reshape(-1, 3)
+
             color_info = []
-            for i, color in enumerate(colors):
+            for i, color in enumerate(colors_rgb):
                 percentage = (label_counts[i] / total_pixels) * 100
-                hex_color = "#{:02x}{:02x}{:02x}".format(color[0], color[1], color[2])
+                hex_color = "#{:02x}{:02x}{:02x}".format(*color)
                 color_info.append((hex_color, percentage))
-            
-            # Sort by percentage (most dominant first)
+
             color_info.sort(key=lambda x: x[1], reverse=True)
-            
             return color_info
-            
-        except ImportError:
-            self.logger.warning("sklearn not available, using basic color extraction")
-            return self._extract_colors_basic(image, num_colors)
+
         except Exception as e:
             self.logger.error(f"Error extracting dominant colors: {e}")
             return self._extract_colors_basic(image, num_colors)
@@ -193,6 +170,36 @@ class DCGenAnalyzer:
             return "dark"
         else:
             return "mixed"
+    
+    def _extract_text_with_positions(self, image_rgb: np.ndarray) -> List[Dict]:
+        """
+        Use Tesseract OCR to extract text with bounding boxes and font size approximation
+        """
+        try:
+            # Convert to grayscale for OCR
+            gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+
+            # Perform OCR with bounding boxes
+            data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
+
+            results = []
+            for i in range(len(data["text"])):
+                if int(data["conf"][i]) > 60 and data["text"][i].strip():
+                    text = data["text"][i]
+                    x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+                    font_size_estimate = h  # Approximate font size by height
+
+                    results.append({
+                        "text": text,
+                        "bbox": {"x": x, "y": y, "width": w, "height": h},
+                        "font_size_estimate": font_size_estimate
+                    })
+
+            return results
+        except Exception as e:
+            self.logger.error(f"OCR extraction failed: {e}")
+            return []
+
 
     async def analyze_screenshot_dcgen(self, image_path: str, html_content: str = "") -> Dict:
         """
@@ -213,13 +220,18 @@ class DCGenAnalyzer:
             raise FileNotFoundError(f"Image file not found: {image_path}")
         
         # Load and prepare image with better color preservation
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
         if image is None:
             raise ValueError(f"Could not load image: {image_path}")
         
         # Convert BGR to RGB for proper color analysis
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         height, width = image_rgb.shape[:2]
+
+        # Extract OCR text data with size/position info
+        self.logger.info("Extracting text positions with OCR...")
+        ocr_text_data = self._extract_text_with_positions(image_rgb)
+
         
         self.logger.info(f"Image loaded: {width}x{height} pixels")
         
@@ -239,9 +251,17 @@ class DCGenAnalyzer:
         
         # Create comprehensive analysis prompt with pre-extracted color information
         detected_colors_str = ", ".join([f"{color[0]} ({percentage:.1f}%)" for color, percentage in dominant_colors[:8]])
-        
+        ocr_snippet = json.dumps(ocr_text_data[:15], indent=2)  # Limit to first 15 entries to avoid overload
         prompt = f"""
         You are an expert web designer and developer. Analyze this screenshot completely and provide a detailed JSON analysis of EVERYTHING you see.
+        OCR-BASED TEXT METADATA:
+        Here is computer-vision extracted bounding box and size metadata for text detected in the screenshot:
+        {ocr_snippet}
+
+        Use this metadata to:
+        - More precisely describe the font sizes (use the `font_size_estimate` field)
+        - Detect text groupings and layout structures based on bounding boxes
+        - Don't ignore this data – it's accurate OCR output
 
         IMPORTANT COLOR GUIDANCE:
         I have pre-analyzed the image and detected these dominant colors: {detected_colors_str}
@@ -344,6 +364,8 @@ class DCGenAnalyzer:
         - HTML content provided: {"Yes" if html_content else "No"}
         
         {f"HTML Context for reference: {html_content[:500]}..." if html_content else ""}
+        OCR Metadata: {ocr_snippet}
+
         """
         
         try:

@@ -116,40 +116,123 @@ class RateLimitedDCGenGenerator:
         return None
 
     def _get_base_prompt(self) -> str:
-        """Get the base prompt with all requirements"""
+        """Get the enhanced base prompt with all requirements"""
         valid_icons_str = ', '.join(self.VALID_LUCIDE_ICONS)
         
         return f"""
-        CRITICAL REQUIREMENTS:
-        1. Generate VALID JSX code only - no TypeScript syntax, no interface definitions
-        2. Use only these VALID Lucide React icons: {valid_icons_str}
-        3. Import lucide-react icons ONLY when actually used: import {{ IconName }} from 'lucide-react'
-        4. For Next.js 14 app directory imports:
-           - Components: import ComponentName from '../components/ComponentName'
-           - Use relative paths correctly
-        5. All code must be production-ready and beautiful, not cookie-cutter
-        6. Use Tailwind CSS classes for styling
-        7. Use valid Unsplash URLs: https://images.unsplash.com/photo-[photo-id]?w=[width]&h=[height]&fit=crop
-        8. No markdown formatting in responses - return pure code only
-        9. Ensure proper JSX syntax with proper closing tags and React patterns
-        10. Add any additional npm packages needed to package.json dependencies
-        11. Return ONLY valid JSON - no extra text, explanations, or multiple JSON objects
-        
-        EXAMPLE VALID JSX COMPONENT:
+        You are an expert Next.js 14 developer creating production-ready components. Follow these CRITICAL requirements:
+
+        ## CODE GENERATION STANDARDS
+        1. Generate ONLY valid JSX code - no TypeScript syntax, interfaces, or type annotations
+        2. Use proper React functional component patterns with hooks (useState, useEffect, etc.)
+        3. All components must be self-contained and production-ready
+        4. Use semantic HTML elements for accessibility
+        5. Include proper ARIA labels and roles where appropriate
+        6. Ensure all interactive elements are keyboard accessible
+
+        ## LUCIDE REACT ICONS
+        Valid icons ONLY: {valid_icons_str}
+        - Import syntax: import {{ IconName }} from 'lucide-react'
+        - ONLY import icons that are actually used in the component
+        - Use consistent icon sizing (w-4 h-4, w-5 h-5, w-6 h-6)
+        - Icons should have proper className and semantic meaning
+
+        ## NEXT.JS 14 APP DIRECTORY STRUCTURE
+        - Root layout: app/layout.jsx
+        - Pages: app/page.jsx, app/about/page.jsx
+        - Components: components/ComponentName.jsx
+        - Relative imports: import Component from '../components/Component'
+        - Use proper Next.js Image component for images
+        - Implement proper metadata and SEO
+
+        ## STYLING REQUIREMENTS
+        - Use ONLY Tailwind CSS utility classes
+        - Implement responsive design (mobile-first approach)
+        - Use consistent spacing scale (4, 8, 12, 16, 24, 32, 48, 64)
+        - Follow modern design principles (proper contrast, typography hierarchy)
+        - Use CSS Grid and Flexbox appropriately
+        - Implement hover states and smooth transitions
+
+        ## IMAGE HANDLING
+        - Valid Unsplash URLs: https://images.unsplash.com/photo-[photo-id]?w=[width]&h=[height]&fit=crop&auto=format
+        - Use Next.js Image component with proper alt text
+        - Implement responsive images with multiple sizes
+        - Use appropriate aspect ratios
+
+        ## COMPONENT ARCHITECTURE
+        - Create reusable, composable components
+        - Use proper prop validation and default values
+        - Implement proper state management
+        - Follow React best practices (avoid inline functions in JSX)
+        - Use proper event handling patterns
+
+        ## OUTPUT FORMAT
+        - Return ONLY valid JSON when requested
+        - Return ONLY code when generating components
+        - NO markdown formatting, explanations, or comments in code responses
+        - Ensure proper closing tags and valid JSX syntax
+        - Use consistent naming conventions (camelCase for props, PascalCase for components)
+
+        ## PERFORMANCE OPTIMIZATION
+        - Use React.memo for expensive components
+        - Implement proper key props for lists
+        - Avoid unnecessary re-renders
+        - Use useCallback and useMemo when appropriate
+        - Optimize bundle size (tree-shaking friendly imports)
+
+        ## ERROR HANDLING
+        - Include proper error boundaries where needed
+        - Handle loading states gracefully
+        - Implement fallback UI for failed operations
+        - Use proper form validation patterns
+
+        ## MODERN REACT PATTERNS
+        - Use custom hooks for complex logic
+        - Implement proper cleanup in useEffect
+        - Use the latest React patterns and features
+        - Follow React 18+ concurrent features guidelines
+
+        EXAMPLE PERFECT COMPONENT:
         ```jsx
         import {{ Home, User, Settings }} from 'lucide-react';
-        
-        export default function ExampleComponent() {{
-          return (
-            <div className="flex items-center space-x-4">
-              <Home className="w-6 h-6" />
-              <span>Valid JSX Component</span>
+        import {{ useState }} from 'react';
+
+        export default function ExampleComponent({{ title = "Default Title", items = [] }}) {{
+        const [isOpen, setIsOpen] = useState(false);
+
+        return (
+            <div className="flex flex-col space-y-4 p-6 bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">{{title}}</h2>
+                <button
+                onClick={{() => setIsOpen(!isOpen)}}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                aria-label="Toggle menu"
+                >
+                <Settings className="w-5 h-5 text-gray-600" />
+                </button>
             </div>
-          );
+            {{isOpen && (
+                <div className="mt-4 space-y-2">
+                {{items.map((item, index) => (
+                    <div key={{index}} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
+                    <Home className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-700">{{item}}</span>
+                    </div>
+                ))}}
+                </div>
+            )}}
+            </div>
+        );
         }}
         ```
-        """
 
+        REMEMBER: 
+        - Quality over quantity - create beautiful, functional components
+        - Think about user experience and accessibility
+        - Ensure cross-browser compatibility
+        - Test your mental model of the component before generating
+        """
     async def generate_dcgen_website(self, analysis: Dict, output_dir: str) -> Dict:
         """Generate complete Next.js project structure with AI-driven prompts"""
         self.logger.info(f"Starting AI-driven DCGen generation for: {output_dir}")
@@ -367,6 +450,15 @@ class RateLimitedDCGenGenerator:
             
         elif file_path.startswith('components/'):
             component_name = file_path.split('/')[-1].replace('.jsx', '')
+            extra_data = ""
+            if component_name.lower() in ['navbar', 'navigation', 'sidebar']:
+                extra_data = """
+                This component requires a `navItems` prop (array of navigation items). 
+                Each item is an object with `{ title: string, href: string, icon?: LucideIcon }`. 
+                If icon is used, use a valid one from the provided Lucide list.
+                Generate the component with props and default props if needed.
+                """
+
             prompt = f"""
             {base_prompt}
             
@@ -377,14 +469,17 @@ class RateLimitedDCGenGenerator:
             - Is production-ready and beautiful
             - Uses proper Unsplash URLs if images needed
             - Based on the analysis data provided
+            - Exports the component as default
+            {extra_data}
             
             VALID LUCIDE ICONS: {', '.join(self.VALID_LUCIDE_ICONS)}
-            
+
             ANALYSIS DATA:
             {json.dumps(analysis, indent=2)}
-            
-            Return ONLY the JSX component code with export default:
+
+            Return ONLY the JSX component code:
             """
+
             
         else:
             raise Exception(f"Unknown file type: {file_path}")
@@ -418,16 +513,21 @@ class RateLimitedDCGenGenerator:
         import_pattern = r'import\s*\{\s*([^}]+)\s*\}\s*from\s*[\'"]lucide-react[\'"]'
         import_match = re.search(import_pattern, code)
         
-        if import_match:
-            imported_icons = [icon.strip() for icon in import_match.group(1).split(',')]
-            valid_imported = [icon for icon in imported_icons if icon in self.VALID_LUCIDE_ICONS]
-            
-            if valid_imported:
-                new_import = f"import {{ {', '.join(valid_imported)} }} from 'lucide-react';"
+        # Extract all icons actually used in JSX
+        used_icons = set(re.findall(r'<\s*(' + '|'.join(self.VALID_LUCIDE_ICONS) + r')\b', code))
+
+        # Prepare the import line
+        if used_icons:
+            new_import = f"import {{ {', '.join(sorted(used_icons))} }} from 'lucide-react';"
+            if re.search(import_pattern, code):
                 code = re.sub(import_pattern, new_import, code)
             else:
-                # Remove lucide import if no valid icons
-                code = re.sub(import_pattern + r'\s*', '', code)
+                # Add import at top if missing
+                code = new_import + "\n" + code
+        else:
+            # Remove invalid or unused lucide import if exists
+            code = re.sub(import_pattern + r'\s*', '', code)
+
         
         # Fix component imports in app/page.jsx
         if file_path == 'app/page.jsx':
